@@ -1,0 +1,31 @@
+# Local env and secrets. Templates (*.template, *.example) stay tracked.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+helm.env
+helm.env.*
+!helm.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+**/credentials.json
+**/secrets.yaml
+**/*-secrets.yaml
+charts/**/values-local-secrets.yaml
+
+# SSH key passphrase. Never commit this.
+scripts/.ssh-passphrase
+scripts/.ssh-passphrase.local
+**/.ssh-passphrase
+**/.ssh-passphrase.local
+
+# Local kubeconfig copies
+*.kubeconfig
+kubeconfig
+
+.DS_Store

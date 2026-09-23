@@ -1,0 +1,8 @@
+# Placeholder Helm chart. Replace with a real chart before `./ssh-ubuntu.sh deploy`.
+
+apiVersion: v2
+name: agent-ops
+description: Local k3s chart for agent-ops experiments
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

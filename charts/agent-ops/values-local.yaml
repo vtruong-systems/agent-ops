@@ -1,0 +1,9 @@
+# Local k3s overlay. No credentials. Images come from the node-local registry.
+
+global:
+  registry: localhost:5000
+  imageTag: dev-local
+  imagePullPolicy: IfNotPresent
+
+# Add services here as they exist.
+# services: {}
