@@ -1,0 +1,20 @@
+global:
+  registry: localhost:5000
+  imagePrefix: agent-ops
+  imageTag: dev-local
+  imagePullPolicy: IfNotPresent
+
+runtime:
+  replicas: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+secrets:
+  openaiApiKey: ""
+  azureOpenAiApiKey: ""

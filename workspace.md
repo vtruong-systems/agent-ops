@@ -1,6 +1,6 @@
 # agent-ops
 
-Workspace for learning and deploying agents (local Helm/k3s first, later Foundry and other external runtimes).
+Workspace for developing a production-minded agent reference implementation: hands-on learning, consulting evidence, and a pattern that can be adapted to client environments.
 
 This tree was seeded from the RAGline Mac → Ubuntu k3s loop. It is a new project, not a copy of the RAGline application.
 
@@ -12,7 +12,7 @@ This tree was seeded from the RAGline Mac → Ubuntu k3s loop. It is a new proje
 - Do **not** helm-upgrade `ragline`, resize or reuse `ragline-data-pvc`, or bind node port **8000** (RAGline chat UI already owns it).
 - Do **not** run `./ssh-ubuntu.sh bootstrap` on this host. Docker, k3s, `/etc/rancher/k3s/registries.yaml`, and the registry container are already there. Bootstrap is gated behind `AGENT_OPS_BOOTSTRAP_FORCE=1` for a future new machine only.
 - GitHub SSH on Ubuntu is already configured from RAGline (`github-setup` is optional).
-- Foundry, evaluations, and a second cluster come later. First runtime is Helm charts and pods in `agent-ops`.
+- The deterministic fixture eval and runtime are the first reference slice. Live providers, Foundry, and any second cluster come later.
 
 ## Topology
 
@@ -24,8 +24,8 @@ This tree was seeded from the RAGline Mac → Ubuntu k3s loop. It is a new proje
 | Docker / registry | yes | `localhost:5000` (existing `ragline-registry` is fine) |
 | Namespace / Helm release | **no** | `agent-ops` |
 | Remote checkout | **no** | `/home/van/src/agent-ops` |
-| Images | shared registry, distinct names | `localhost:5000/<service>:<immutable-tag>` |
-| Node LoadBalancer port | **no** | not 8000; set `AGENT_OPS_SMOKE_PORT` when a Service exists |
+| Images | shared registry, distinct names | `localhost:5000/agent-ops-<service>:<immutable-tag>` |
+| Service exposure | **no** | ClusterIP plus local port-forward; never node port 8000 |
 
 `kubectl` context is the same cluster. Always pass `-n agent-ops` (the scripts do). `kubectl get pods -n ragline` is the other product.
 
@@ -55,14 +55,14 @@ Defaults live in `scripts/dev-env.env`. SSH passphrase lookup:
 
 Do not commit passphrases or `helm.env`.
 
-## Daily loop (once there is a service image)
+## Daily loop
 
 ```bash
 ./ssh-ubuntu.sh unlock
 ./ssh-ubuntu.sh push-src
-AGENT_OPS_ALLOW_DIRTY=1 ./ssh-ubuntu.sh build <service>
-./ssh-ubuntu.sh deploy dev-<git-sha>
-./ssh-ubuntu.sh rollout <service>
+./ssh-ubuntu.sh build runtime dev-<immutable-tag>
+./ssh-ubuntu.sh deploy dev-<immutable-tag>
+./ssh-ubuntu.sh rollout runtime
 ./ssh-ubuntu.sh smoke
 ```
 
@@ -73,7 +73,7 @@ Lessons carried over from RAGline:
 3. Helm cannot shrink an existing PVC. Size agent-ops volumes independently of RAGline.
 4. Do not put keys in committed values. Use `helm.env` (gitignored) and `./scripts/render-local-secret-values.sh`.
 5. Use `AGENT_OPS_DOCKER_NETWORK=host` if Docker bridge DNS/IPv6 breaks package installs in builds.
-6. Keep a service allowlist in `AGENT_OPS_SERVICE_ALLOWLIST` once names are stable. Empty means any name under `services/`.
+6. Keep the service allowlist narrow. It defaults to `runtime`.
 7. Helm runs on the Mac. Image builds run on Ubuntu.
 
 ## Layout
@@ -88,7 +88,7 @@ Lessons carried over from RAGline:
 | `scripts/ubuntu-bootstrap.sh` | New-host only; blocked on this shared node |
 | `scripts/build-service.sh` | Per-service Docker build on Ubuntu |
 | `scripts/render-local-secret-values.sh` | Gitignored Helm secrets overlay |
-| `charts/agent-ops/` | Helm chart (stub until a real workload exists) |
+| `charts/agent-ops/` | Runtime Deployment, ClusterIP Service, and environment values |
 | `services/` | Dockerized workloads (`services/<name>/Dockerfile`) |
 | `helm.env.template` | Copy to `helm.env`; never commit the filled file |
 
@@ -98,8 +98,4 @@ Application code, Helm product values, `helm.env` keys, GitHub PATs, and the `ra
 
 ## Next
 
-1. Decide the first pod (hello-world, agent runtime, or Foundry sidecar).
-2. Add `services/<name>/Dockerfile` and set `AGENT_OPS_SERVICE_ALLOWLIST`.
-3. Fill `charts/agent-ops` with a Deployment that pulls `localhost:5000/<name>:<tag>`. Use a Service port other than 8000.
-4. Prove check → push-src → build → deploy → rollout → smoke on namespace `agent-ops` without touching `ragline`.
-5. Add evaluation later; do not block the first Helm loop on it.
+Prove check → push-src → verified image build → deploy → rollout → fixture smoke in namespace `agent-ops` without touching `ragline`. Preserve the resulting commands, failure modes, and operational decisions as part of the reference implementation.

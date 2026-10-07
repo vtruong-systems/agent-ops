@@ -1,0 +1,9 @@
+global:
+  registry: localhost:5000
+  imagePrefix: agent-ops
+  imageTag: ci-test-0000000
+  imagePullPolicy: IfNotPresent
+
+secrets:
+  openaiApiKey: ""
+  azureOpenAiApiKey: ""

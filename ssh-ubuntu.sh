@@ -27,7 +27,7 @@ Commands:
   build <service> [tag] Build linux/amd64 image and push to local registry
   deploy [tag]          helm upgrade --install from this Mac
   rollout <service>     Wait for a Deployment rollout
-  smoke                 Basic service reachability checks
+  smoke                 Port-forward the runtime and run fixture evals
 
 Environment (see scripts/dev-env.env):
   AGENT_OPS_SSH_HOST AGENT_OPS_SSH_USER AGENT_OPS_SSH_IDENTITY
@@ -240,6 +240,9 @@ cmd_push_src() {
     --exclude helm.env \
     --exclude values-local-secrets.yaml \
     --exclude scripts/.ssh-passphrase \
+    --exclude eval-report.json \
+    --exclude .pytest_cache \
+    --exclude '*.egg-info' \
     -e "ssh -o BatchMode=yes -o IdentitiesOnly=yes -i ${AGENT_OPS_SSH_IDENTITY}" \
     "${ROOT}/" \
     "${AGENT_OPS_SSH_USER}@${AGENT_OPS_SSH_HOST}:${AGENT_OPS_REMOTE_ROOT}/"
@@ -307,9 +310,9 @@ export AGENT_OPS_DOCKER_NO_CACHE="${AGENT_OPS_DOCKER_NO_CACHE:-0}"
 export AGENT_OPS_IMAGE_PREFIX="${AGENT_OPS_IMAGE_PREFIX}"
 export DOCKER_DEFAULT_PLATFORM=linux/amd64
 ./scripts/build-service.sh "${service}" "\${TAG}"
-docker tag "${AGENT_OPS_IMAGE_PREFIX}-${service}:\${TAG}" "${AGENT_OPS_REGISTRY}/${service}:\${TAG}"
-docker push "${AGENT_OPS_REGISTRY}/${service}:\${TAG}"
-echo "pushed ${AGENT_OPS_REGISTRY}/${service}:\${TAG}"
+docker tag "${AGENT_OPS_IMAGE_PREFIX}-${service}:\${TAG}" "${AGENT_OPS_REGISTRY}/${AGENT_OPS_IMAGE_PREFIX}-${service}:\${TAG}"
+docker push "${AGENT_OPS_REGISTRY}/${AGENT_OPS_IMAGE_PREFIX}-${service}:\${TAG}"
+echo "pushed ${AGENT_OPS_REGISTRY}/${AGENT_OPS_IMAGE_PREFIX}-${service}:\${TAG}"
 EOF
 }
 
@@ -357,7 +360,7 @@ cmd_rollout() {
   kubectl -n "${AGENT_OPS_NAMESPACE}" rollout status "deployment/${AGENT_OPS_RELEASE}-${service}" --timeout=180s
 }
 
-cmd_smoke() {
+cmd_smoke() (
   echo "cluster:"
   kubectl get nodes
   echo
@@ -370,14 +373,66 @@ cmd_smoke() {
   echo "services:"
   kubectl get svc -n "${AGENT_OPS_NAMESPACE}" || true
   echo
+  local python_bin="${AGENT_OPS_PYTHON:-}"
+  if [[ -z "${python_bin}" ]]; then
+    if [[ -x "${ROOT}/.venv/bin/python" ]]; then
+      python_bin="${ROOT}/.venv/bin/python"
+    else
+      python_bin="python3"
+    fi
+  fi
+
+  local forward_log
+  forward_log="$(mktemp -t agent-ops-port-forward.XXXXXX)"
+  local forward_pid=""
+  cleanup_smoke() {
+    if [[ -n "${forward_pid}" ]]; then
+      kill "${forward_pid}" >/dev/null 2>&1 || true
+      wait "${forward_pid}" >/dev/null 2>&1 || true
+    fi
+    rm -f "${forward_log}"
+  }
+  trap cleanup_smoke EXIT
+
+  echo
+  echo "port-forwarding service/agent-ops-runtime to 127.0.0.1:${AGENT_OPS_LOCAL_PORT}"
+  kubectl -n "${AGENT_OPS_NAMESPACE}" port-forward \
+    service/agent-ops-runtime "${AGENT_OPS_LOCAL_PORT}:8080" \
+    >"${forward_log}" 2>&1 &
+  forward_pid=$!
+
+  local health_url="http://127.0.0.1:${AGENT_OPS_LOCAL_PORT}/healthz"
+  local ready=0
+  local attempt
+  for attempt in $(seq 1 30); do
+    if curl -fsS --connect-timeout 1 "${health_url}" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    if ! kill -0 "${forward_pid}" >/dev/null 2>&1; then
+      echo "port-forward stopped unexpectedly"
+      sed -n '1,120p' "${forward_log}"
+      return 1
+    fi
+    sleep 0.5
+  done
+  if [[ "${ready}" != "1" ]]; then
+    echo "runtime did not become healthy at ${health_url}"
+    sed -n '1,120p' "${forward_log}"
+    return 1
+  fi
+
+  "${python_bin}" -m agent_ops.eval \
+    --provider fake \
+    --target "http://127.0.0.1:${AGENT_OPS_LOCAL_PORT}" \
+    --report "${AGENT_OPS_SMOKE_REPORT:-${ROOT}/eval-report.json}"
+
   if [[ -n "${AGENT_OPS_SMOKE_PORT}" ]]; then
     UI_URL="http://${AGENT_OPS_SSH_HOST}:${AGENT_OPS_SMOKE_PORT}"
     echo "GET ${UI_URL}"
     curl -sS -o /dev/null -w "http_code=%{http_code} time=%{time_total}\n" --connect-timeout 5 "${UI_URL}" || true
-  else
-    echo "no AGENT_OPS_SMOKE_PORT set (port 8000 is the RAGline chat UI; pick another port for agent-ops)"
   fi
-}
+)
 
 COMMAND="${1:-shell}"
 if [[ $# -gt 0 ]]; then

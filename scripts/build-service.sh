@@ -29,7 +29,12 @@ if [[ ! -f "${SERVICE_DIR}/Dockerfile" ]]; then
   exit 1
 fi
 
-BUILD_ARGS=()
+if [[ -z "${AGENT_OPS_BUILD_CONTEXT:-}" && -f "${SERVICE_DIR}/build.env" ]]; then
+  # shellcheck disable=SC1091
+  source "${SERVICE_DIR}/build.env"
+fi
+
+BUILD_ARGS=(--platform "${AGENT_OPS_DOCKER_PLATFORM:-linux/amd64}")
 if [[ "${AGENT_OPS_DOCKER_NO_CACHE:-0}" == "1" ]]; then
   BUILD_ARGS+=(--no-cache)
 fi
@@ -47,3 +52,7 @@ else
 fi
 
 echo "built ${IMAGE}"
+
+if [[ "${SERVICE}" == "runtime" ]]; then
+  "${REPO_ROOT}/scripts/verify-runtime-image.sh" "${IMAGE}"
+fi

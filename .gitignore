@@ -29,3 +29,10 @@ scripts/.ssh-passphrase.local
 kubeconfig
 
 .DS_Store
+
+# Local Python and eval output
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+eval-report.json

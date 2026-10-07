@@ -2,8 +2,6 @@
 
 global:
   registry: localhost:5000
+  imagePrefix: agent-ops
   imageTag: dev-local
   imagePullPolicy: IfNotPresent
-
-# Add services here as they exist.
-# services: {}

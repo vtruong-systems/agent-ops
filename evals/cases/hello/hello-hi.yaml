@@ -1,0 +1,9 @@
+id: hello-hi
+agent: hello
+status: active
+input: "hi"
+scorers:
+  - name: contains
+    value: "hello"
+  - name: exact
+    value: "hello"

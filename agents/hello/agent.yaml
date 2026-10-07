@@ -1,0 +1,12 @@
+name: hello
+version: 0
+provider: fake
+model: ""
+instructions: |
+  Reply with the single word hello.
+fake_output: hello
+tools: []
+limits:
+  max_turns: 1
+  timeout_seconds: 30
+  max_output_chars: 2000

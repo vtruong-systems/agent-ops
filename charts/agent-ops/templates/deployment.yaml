@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-ops-runtime
+  labels:
+    app.kubernetes.io/name: agent-ops-runtime
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.runtime.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-ops-runtime
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-ops-runtime
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: runtime
+          image: "{{ .Values.global.registry }}/{{ .Values.global.imagePrefix }}-runtime:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.runtime.port }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          resources:
+{{ toYaml .Values.runtime.resources | indent 12 }}
+{{- if or .Values.secrets.openaiApiKey .Values.secrets.azureOpenAiApiKey }}
+          env:
+{{- if .Values.secrets.openaiApiKey }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agent-ops-runtime-provider-keys
+                  key: OPENAI_API_KEY
+{{- end }}
+{{- if .Values.secrets.azureOpenAiApiKey }}
+            - name: AZURE_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agent-ops-runtime-provider-keys
+                  key: AZURE_OPENAI_API_KEY
+{{- end }}
+{{- end }}

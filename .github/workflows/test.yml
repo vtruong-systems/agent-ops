@@ -1,0 +1,42 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: azure/setup-helm@v4
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Unit and contract tests
+        run: pytest -q
+      - name: Source fixture eval
+        run: python -m agent_ops.eval --provider fake --report eval-report-source.json
+      - name: Build runtime image
+        run: docker build -f services/runtime/Dockerfile -t agent-ops-runtime:ci .
+      - name: Verify runtime image
+        run: ./scripts/verify-runtime-image.sh agent-ops-runtime:ci
+      - name: Validate Helm chart
+        run: |
+          helm lint charts/agent-ops
+          helm template agent-ops charts/agent-ops -f charts/agent-ops/values-ci.yaml >/dev/null
+      - name: Upload source eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-source
+          path: eval-report-source.json
+          if-no-files-found: ignore
